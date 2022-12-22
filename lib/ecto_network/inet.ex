@@ -17,7 +17,7 @@ defmodule EctoNetwork.INET do
   def cast(%Postgrex.INET{} = address), do: {:ok, address}
 
   def cast(address) when is_tuple(address),
-    do: cast(%Postgrex.INET{address: address, netmask: address_netmask(address)})
+    do: cast(%Postgrex.INET{address: address, netmask: nil})
 
   def cast(address) when is_binary(address) do
     {address, netmask} =
@@ -51,13 +51,6 @@ defmodule EctoNetwork.INET do
 
   @doc "Load from the native Ecto representation."
   def load(%Postgrex.INET{} = inet) do
-    inet =
-      cond do
-        address_netmask(inet.address, inet.netmask) -> inet
-        address_netmask(inet.address) -> %{inet | netmask: address_netmask(inet.address)}
-        true -> %{inet | netmask: nil}
-      end
-
     {:ok, inet}
   end
 
@@ -65,13 +58,6 @@ defmodule EctoNetwork.INET do
 
   @doc "Convert to the native Ecto representation."
   def dump(%Postgrex.INET{} = inet) do
-    inet =
-      if inet.netmask do
-        inet
-      else
-        %{inet | netmask: address_netmask(inet.address)}
-      end
-
     {:ok, inet}
   end
 
@@ -79,8 +65,6 @@ defmodule EctoNetwork.INET do
 
   @doc "Convert from native Ecto representation to a binary."
   def decode(%Postgrex.INET{address: address, netmask: netmask}) do
-    netmask = address_netmask(address, netmask)
-
     address
     |> :inet.ntoa()
     |> case do
@@ -93,28 +77,14 @@ defmodule EctoNetwork.INET do
     end
   end
 
-  defp address_netmask(address) do
-    if(tuple_size(address) == 4, do: 32, else: 128)
-  end
-
-  defp address_netmask(address, netmask) do
-    cond do
-      tuple_size(address) == 4 && netmask == 32 -> nil
-      tuple_size(address) == 8 && netmask == 128 -> nil
-      true -> netmask
-    end
-  end
-
   defp cast_netmask(mask, _address) when is_binary(mask) do
     mask
     |> String.trim()
     |> Integer.parse()
   end
 
-  # For addresses without a netmask, use the default (full) mask.
-  # Returns same structure as a successful Integer.parse()
-  defp cast_netmask(nil, {:ok, address}) do
-    {address_netmask(address), ""}
+  defp cast_netmask(nil, {:ok, _address}) do
+    {nil, ""}
   end
 
   defp cast_netmask(_mask, _address), do: :error
